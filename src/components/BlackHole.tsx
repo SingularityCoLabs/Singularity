@@ -54,6 +54,7 @@ export function BlackHole() {
       uIntro: { value: 0 },
       uSpin: { value: 1 },
       uDoppler: { value: 0.55 },
+      uExposure: { value: 0.62 },
     }),
     [],
   );

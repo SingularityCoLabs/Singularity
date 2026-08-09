@@ -52,11 +52,11 @@ export function Scene() {
 
       <EffectComposer multisampling={0} enableNormalPass={false}>
         <Bloom
-          intensity={0.85}
-          luminanceThreshold={0.55}
-          luminanceSmoothing={0.3}
+          intensity={0.55}
+          luminanceThreshold={0.72}
+          luminanceSmoothing={0.22}
           mipmapBlur
-          radius={0.82}
+          radius={0.78}
         />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
       </EffectComposer>

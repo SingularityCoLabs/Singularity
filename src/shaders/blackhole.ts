@@ -125,15 +125,15 @@ vec3 skySample(vec3 dir) {
     float point = pow(smoothstep(0.34, 0.0, d), 9.0);
     float mag = (rnd.z - gate) / (1.0 - gate);
 
-    lum += point * mag * (1.6 - float(k) * 0.34);
+    lum += point * mag * (1.05 - float(k) * 0.26);
   }
 
   // A dust lane, so the sky is not a uniform sprinkle.
   float lane = dot(dir, normalize(vec3(0.34, 0.86, -0.38))) * 2.5;
-  lum += 0.040 * exp(-lane * lane) * (0.30 + fbm(dir * 3.1 + 11.0) * 0.9);
+  lum += 0.022 * exp(-lane * lane) * (0.30 + fbm(dir * 3.1 + 11.0) * 0.9);
 
   // Never mathematically black: a trace of ambience holds the frame.
-  return vec3(lum + 0.006);
+  return vec3(lum + 0.004);
 }
 
 // ---------------------------------------------------------------------------
@@ -164,10 +164,11 @@ float discSample(vec3 p, vec3 vel, out float opacity) {
   float fine   = fbm(q * 2.85 - vec3(0.0, 0.0, uTime * 0.050 * uSpin));
   float dens = shape * (0.46 + 1.00 * coarse) * (0.58 + 0.68 * fine);
 
-  // With no hue to carry it, radius has to read as tone: near-white at the
-  // inner edge falling to dark graphite at the rim.
-  float temp = pow(DISK_IN / r, 1.25);
-  float tone = mix(0.16, 1.0, smoothstep(0.06, 0.92, temp));
+  // With no hue to carry it, radius has to read as tone: the inner edge is the
+  // only part allowed near white, and it falls away fast to near-black at the
+  // rim so the disc reads as a thin bright line, not a lit plate.
+  float temp = pow(DISK_IN / r, 1.6);
+  float tone = mix(0.035, 1.0, smoothstep(0.10, 0.95, temp));
 
   // Beaming and gravitational shift, as brightness alone.
   float beta = clamp(sqrt(0.5 / max(r, 1.05)), 0.0, 0.75);
@@ -177,10 +178,10 @@ float discSample(vec3 p, vec3 vel, out float opacity) {
   float shift = sqrt(max(1.0 - HORIZON / r, 0.04))
               / max(gamma * (1.0 - dot(orbit, toEye)), 1e-3);
 
-  float boost = mix(1.0, clamp(shift * shift * shift, 0.08, 6.0), uDoppler);
+  float boost = mix(1.0, clamp(shift * shift * shift, 0.05, 5.0), uDoppler);
 
   opacity = clamp(dens * 1.30, 0.0, 1.0);
-  return tone * dens * (0.55 + 3.2 * temp) * boost;
+  return tone * dens * (0.10 + 1.5 * temp) * boost;
 }
 
 // ---------------------------------------------------------------------------
