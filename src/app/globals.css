@@ -152,3 +152,74 @@ main {
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Centre wrapper – stacks the title and links vertically.
+   -------------------------------------------------------------------------- */
+
+.center-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2em;
+}
+
+/* --------------------------------------------------------------------------
+   Links row.
+   -------------------------------------------------------------------------- */
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  animation: links-in 1800ms cubic-bezier(0.16, 0.84, 0.28, 1) 400ms both;
+}
+
+.link {
+  font-size: clamp(11px, min(1.6vw, 2.4vh), 16px);
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 320ms ease, text-shadow 320ms ease;
+}
+
+.link:hover,
+.link:focus-visible {
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow:
+    0 0 8px rgba(190, 235, 255, 0.35),
+    0 0 24px rgba(190, 235, 255, 0.12);
+}
+
+.link:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.3);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+.link-divider {
+  font-size: clamp(11px, min(1.6vw, 2.4vh), 16px);
+  color: rgba(255, 255, 255, 0.25);
+  user-select: none;
+}
+
+@keyframes links-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .links {
+    animation: none;
+  }
+}

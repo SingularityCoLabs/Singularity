@@ -227,14 +227,28 @@ void main() {
     col += GOLD * pow(1.0 - ndv, 3.4) * (0.28 + g * 1.05);
   }
 
-  // ---- gold rim ------------------------------------------------------------
-  float rim = exp(-pow((r - R) / RIM_W, 2.0));
-  if (rim > 0.002) {
-    // Angular noise keeps the ring from reading as vector-clean linework.
+  // ---- gold rim (dot pattern) -----------------------------------------------
+  // The rim envelope is wider than before so dots have room to populate it.
+  float rimEnv = exp(-pow((r - R) / (RIM_W * 3.5), 2.0));
+  if (rimEnv > 0.002) {
     float ang = atan(uv.y, uv.x);
-    float grain = 0.58 + 0.42 * vnoise(vec3(ang * 9.0, r * 44.0, t * 0.35));
-    col += GOLD * rim * 1.45 * grain;
-    col += ICE * rim * rim * 0.30 * grain;
+    float rimDots = 0.0;
+
+    // Several dot layers at slightly different radii and rotations so the
+    // ring reads as a scattered band of gold particles, not a single row.
+    for (int k = 0; k < 3; k++) {
+      float fk = float(k);
+      float offset = fk * 0.008 - 0.008;          // spread across the rim width
+      float a = fk * 1.05 + t * 0.015 * (mod(fk, 2.0) < 0.5 ? 1.0 : -1.0);
+      float ca = cos(a), sa = sin(a);
+      vec2 ru = mat2(ca, -sa, sa, ca) * uv;
+
+      rimDots += dotCell2(ru, 38.0 + fk * 12.0, 0.22, 0.45, fk * 13.0 + 77.0)
+               / (1.0 + fk * 0.35);
+    }
+
+    col += GOLD * rimDots * rimEnv * 2.2;
+    col += ICE  * rimDots * rimEnv * rimEnv * 0.35;
   }
 
   // ---- drifting dust -------------------------------------------------------
