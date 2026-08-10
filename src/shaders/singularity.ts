@@ -1,13 +1,17 @@
 /**
  * Expansion study.
  *
- * One fullscreen pass. A stipple-filled sphere, a gold limb, and a train of
- * wavefronts expanding out of the centre — all analytic, so there is no
- * geometry, no texture, and no postprocessing chain behind this.
+ * One fullscreen pass. A dot-filled sphere, a gold limb, and a slow drift of
+ * dust around it — all analytic, so there is no geometry, no texture, and no
+ * postprocessing chain behind this.
  *
  * Screen units: 1.0 is half the *short* axis, so the sphere stays a circle at
  * every aspect ratio and the composition never squashes.
  */
+
+/** Sphere radius in screen units. The framing uniform is derived from it, so
+    the two cannot drift apart. */
+export const SPHERE_R = 0.78;
 
 export const SING_VERT = /* glsl */ `#version 300 es
 
@@ -35,20 +39,18 @@ uniform float uScale;     // per-aspect framing
 
 out vec4 fragColor;
 
-#ifndef SHELLS
-  #define SHELLS 6
-#endif
 #ifndef LAYERS
   #define LAYERS 3
 #endif
+#ifndef DUST
+  #define DUST 3
+#endif
 
-#define R        0.44   // sphere radius
-#define REACH    0.68   // how far past R the wavefronts travel
-#define RIM_W    0.013
-#define SHELL_W  0.006
+#define R        ${SPHERE_R.toFixed(3)}   // sphere radius
+#define RIM_W    0.016
 
-// Sampled from the reference: deep blue body, teal stipple, ice highlight,
-// amber limb, mid-blue shells. No hue outside this ramp.
+// Sampled from the reference: deep blue body, teal dots, ice highlight,
+// amber limb, mid-blue dust. No hue outside this ramp.
 const vec3 DEEP  = vec3(0.035, 0.161, 0.247);
 const vec3 CYAN  = vec3(0.122, 0.659, 0.722);
 const vec3 ICE   = vec3(0.639, 0.910, 0.961);
@@ -69,7 +71,7 @@ float hash13(vec3 p) {
  * Deliberately not the fract(sin(x) * 43758.0) variety. sin() of large
  * arguments loses precision badly across drivers, and on a software rasteriser
  * it collapses to zero — every cell then fails the density gate and the whole
- * stipple field silently renders as nothing.
+ * dot field silently renders as nothing.
  */
 vec3 hash33(vec3 p) {
   vec3 q = fract(p * vec3(0.1031, 0.1030, 0.0973));
@@ -110,31 +112,65 @@ mat3 rotX(float a) {
 }
 
 // ---------------------------------------------------------------------------
-// Stipple. Most cells hold nothing; the ones that clear the gate hold a
-// jittered point splat. Empty cells are what make this read as grain rather
-// than as noise.
+// Dots. The volume is diced into cells; a cell that clears the gate holds one
+// round dot at a jittered position. The jitter is kept inside the cell so a dot
+// is never clipped by the cell it belongs to — that is what lets a single
+// lookup per layer stand in for a proper point splat.
 //
-// The field lives in the *rotating* volume, so speckles travel with the
-// surface instead of being reseeded per frame. On top of that each cell
-// twinkles on a phase taken from its own hash — shimmer, never strobe.
+// Cell size is measured on the unit sphere, not in pixels, so the dots keep the
+// same size relative to the sphere on a phone and on a 5K display.
 // ---------------------------------------------------------------------------
 
-float stipple(vec3 p, float scale, float gate) {
+/**
+ * Whether a cell holds a dot at all, and how bright it is this instant. Empty
+ * cells are what make this read as dots rather than as noise, and each dot
+ * breathes on a phase taken from its own hash — shimmer, never strobe, and
+ * never all in step.
+ */
+float dotLife(vec3 rnd, float gate) {
+  float on = smoothstep(gate, gate + 0.22, rnd.z);
+  if (on <= 0.0) return 0.0;
+  return on * (0.6 + 0.4 * sin(uTime * 0.8 + rnd.x * 6.2831));
+}
+
+/** Dots through a volume — for the sphere, where the surface cuts the lattice. */
+float dotCell(vec3 p, float scale, float radius, float gate) {
+  vec3 c = p * scale;
+  vec3 rnd = hash33(floor(c));
+
+  float life = dotLife(rnd, gate);
+  if (life <= 0.0) return 0.0;
+
+  vec3 centre = vec3(0.5) + (rnd - 0.5) * (1.0 - 2.0 * radius);
+  return smoothstep(radius, radius * 0.32, length(fract(c) - centre)) * life;
+}
+
+/**
+ * Dots across a plane. This has to be its own function rather than a volume
+ * lookup at a fixed depth: with the third axis pinned, every cell centre sits
+ * a jitter-width away in z, no dot is ever within one radius of the sample,
+ * and the field renders as nothing at all. seed separates one layer from the
+ * next.
+ */
+float dotCell2(vec2 p, float scale, float radius, float gate, float seed) {
+  vec2 c = p * scale;
+  vec3 rnd = hash33(vec3(floor(c), seed));
+
+  float life = dotLife(rnd, gate);
+  if (life <= 0.0) return 0.0;
+
+  vec2 centre = vec2(0.5) + (rnd.xy - 0.5) * (1.0 - 2.0 * radius);
+  return smoothstep(radius, radius * 0.32, length(fract(c) - centre)) * life;
+}
+
+/** Layered dots: a coarse pass for structure, finer passes for tooth. */
+float dotField(vec3 p, float scale, float radius, float gate) {
   float sum = 0.0;
   float amp = 1.0;
   float norm = 0.0;
 
   for (int k = 0; k < LAYERS; k++) {
-    vec3 c = p * scale * pow(2.03, float(k));
-    vec3 rnd = hash33(floor(c));
-
-    // Every cell contributes something. A sparse splat would give stars; what
-    // the reference has is grain, so the gate sets how much of the range lights
-    // up rather than which cells exist at all.
-    float lit = smoothstep(gate, 1.0, rnd.z);
-    float tw = 0.55 + 0.45 * sin(uTime * 0.8 + rnd.x * 6.2831);
-
-    sum += lit * tw * amp;
+    sum += dotCell(p + float(k) * 21.7, scale * pow(2.03, float(k)), radius, gate) * amp;
     norm += amp;
     amp *= 0.55;
   }
@@ -142,12 +178,12 @@ float stipple(vec3 p, float scale, float gate) {
 }
 
 /**
- * A core point source. There is no bloom pass to lean on, so the glow is an
+ * The core, at the centre. There is no bloom pass to lean on, so the glow is an
  * inverse-square tail plus a tight gaussian centre — cheap, and it clips to
  * white in the middle the way a real overexposed point does.
  */
-float corePoint(vec2 uv, vec2 c) {
-  float d2 = dot(uv - c, uv - c);
+float corePoint(vec2 uv) {
+  float d2 = dot(uv, uv);
   return 0.00030 / (d2 + 2.0e-5) + 0.55 * exp(-d2 / 0.00055);
 }
 
@@ -156,14 +192,16 @@ vec3 aces(vec3 x) {
 }
 
 void main() {
-  // Normalising on the short axis is what keeps the sphere circular.
+  // Normalising on the short axis is what keeps the sphere circular, and
+  // uScale is derived from R, so the sphere is centred and fully in frame at
+  // every aspect ratio.
   vec2 uv = (gl_FragCoord.xy * 2.0 - uRes) / min(uRes.x, uRes.y);
   uv *= uScale;
 
   float r = length(uv);
   float t = uTime;
 
-  // The silhouette never moves. Only the sample point rotates, so grain flows
+  // The silhouette never moves. Only the sample point rotates, so dots flow
   // across a sphere that stays perfectly symmetrical.
   mat3 view = rotY(t * 0.10 + uLean.x * 0.34)
             * rotX(0.22 + uLean.y * 0.26 + sin(t * 0.13) * 0.06);
@@ -176,17 +214,17 @@ void main() {
     vec3 q = view * (vec3(uv, z) / R);
     float ndv = z / R;                     // 1 at the centre, 0 at the limb
 
-    float g = stipple(q, 190.0, 0.34);
+    float g = dotField(q, 26.0, 0.34, 0.30);
 
     // A ray grazing the limb crosses more of the volume than one through the
     // middle, so the same density has to read brighter there.
     float depth = mix(1.0, 2.05, pow(1.0 - ndv, 1.6));
 
-    col += mix(DEEP * 0.9, CYAN, g * 0.85) * (0.26 + g * 1.45) * depth;
-    col += ICE * g * g * 0.45;
+    col += mix(DEEP * 0.9, CYAN, g * 0.85) * (0.24 + g * 1.45) * depth;
+    col += ICE * g * g * 0.5;
 
     // Gold gathers where the shell of the sphere turns edge-on.
-    col += GOLD * pow(1.0 - ndv, 3.4) * (0.30 + g * 1.05);
+    col += GOLD * pow(1.0 - ndv, 3.4) * (0.28 + g * 1.05);
   }
 
   // ---- gold rim ------------------------------------------------------------
@@ -199,38 +237,42 @@ void main() {
     col += ICE * rim * rim * 0.30 * grain;
   }
 
-  // ---- expanding wavefronts ------------------------------------------------
-  // Each shell rides a fract() phase offset by k/SHELLS, so they are evenly
-  // spaced and recycle forever. The window fades in after birth and out before
-  // death, which is what makes the wrap seamless instead of popping.
-  for (int k = 0; k < SHELLS; k++) {
-    float ph = fract(t * 0.055 + float(k) / float(SHELLS));
-    float rad = R + ph * REACH;
-    float w = SHELL_W * (0.5 + ph * 2.4);
-    float d = (r - rad) / w;
-    float line = exp(-d * d);
-    if (line < 0.0025) continue;
+  // ---- drifting dust -------------------------------------------------------
+  // Loose dots outside the limb, each layer on its own slow rotation so the
+  // field shears against itself instead of turning as one rigid disc.
+  // Tight falloff: the dust is a shell hugging the limb, not a starfield. By
+  // the corner of a wide display it has faded to nothing.
+  float halo = smoothstep(R - 0.02, R + 0.07, r) * exp(-max(r - R, 0.0) * 3.4);
+  if (halo > 0.002) {
+    float dust = 0.0;
+    for (int k = 0; k < DUST; k++) {
+      float fk = float(k);
+      // Alternating direction: neighbouring layers counter-rotate, so the field
+      // shears against itself instead of turning as one rigid disc.
+      float dir = mod(fk, 2.0) < 0.5 ? 1.0 : -1.0;
+      float a = t * (0.020 + fk * 0.011) * dir + fk * 2.1;
+      float ca = cos(a), sa = sin(a);
+      vec2 du = mat2(ca, -sa, sa, ca) * uv;
 
-    float window = smoothstep(0.0, 0.08, ph) * (1.0 - smoothstep(0.30, 1.0, ph));
-    // Stippled in screen space: the wavefronts are made of the same dust the
-    // body is, so they must not read as clean vector arcs.
-    float grain = 0.30 + 0.90 * stipple(vec3(uv * 3.0, float(k) * 7.0), 64.0, 0.30);
-
-    col += SHELL * line * window * grain * 1.55;
-    col += ICE * line * line * window * grain * 0.32;
+      // No time term in the lattice itself: the rotation is what moves the
+      // dots. Sliding the lattice would make each dot jump as it crossed a
+      // cell border instead of travelling.
+      dust += dotCell2(du, 22.0 + fk * 9.0, 0.19, 0.70, fk * 17.0)
+            / (1.0 + fk * 0.45);
+    }
+    col += mix(SHELL, ICE, 0.42) * dust * halo * 2.4;
   }
 
-  // ---- cores ---------------------------------------------------------------
+  // ---- core ----------------------------------------------------------------
   float pulse = 0.76 + 0.24 * sin(t * 1.7);
-  float cores = corePoint(uv, vec2(0.0, 0.034)) + corePoint(uv, vec2(0.0, -0.034));
-  col += vec3(0.55, 0.88, 1.0) * cores * pulse;
+  col += vec3(0.55, 0.88, 1.0) * corePoint(uv) * pulse * 0.9;
 
   // A wide halo so the object sits in light rather than cutting out of black.
-  col += SHELL * exp(-r * r / 0.30) * 0.09;
+  col += SHELL * exp(-r * r / 0.95) * 0.09;
 
   col *= uIntro * uExposure;
 
-  col *= mix(0.45, 1.0, smoothstep(1.55, 0.28, r));
+  col *= mix(0.5, 1.0, smoothstep(2.0, 0.5, r));
   col = aces(col);
 
   // Break the banding the long dark gradients would otherwise show.

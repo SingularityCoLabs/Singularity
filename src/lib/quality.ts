@@ -5,16 +5,16 @@ export type QualitySettings = {
   /** Ceiling on devicePixelRatio. The shader is fill-bound, so this is the
       single biggest lever on frame cost. */
   maxDpr: number;
-  /** Expanding wavefronts drawn per frame. */
-  shells: number;
-  /** Cell-splat layers in the stipple. Each layer is a full hash33 lookup. */
+  /** Drifting dot layers outside the limb. */
+  dust: number;
+  /** Dot layers on the sphere itself. Each layer is a full hash33 lookup. */
   layers: number;
 };
 
 const PRESETS: Record<Tier, Omit<QualitySettings, "tier">> = {
-  high: { maxDpr: 1.75, shells: 7, layers: 3 },
-  medium: { maxDpr: 1.4, shells: 5, layers: 2 },
-  low: { maxDpr: 1.0, shells: 4, layers: 2 },
+  high: { maxDpr: 1.75, dust: 3, layers: 3 },
+  medium: { maxDpr: 1.4, dust: 2, layers: 2 },
+  low: { maxDpr: 1.0, dust: 2, layers: 2 },
 };
 
 export function settingsFor(tier: Tier): QualitySettings {

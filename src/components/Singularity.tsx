@@ -5,11 +5,24 @@ import { useEffect, useRef, useState } from "react";
 import { buildProgram, createContext, uniformCache } from "@/lib/gl";
 import { createField, ramp, stepField } from "@/lib/motion";
 import { detectTier, downgrade, settingsFor, type QualitySettings } from "@/lib/quality";
-import { SING_FRAG, SING_VERT } from "@/shaders/singularity";
+import { SING_FRAG, SING_VERT, SPHERE_R } from "@/shaders/singularity";
 
 /** Where the clock is parked when the user has asked for no motion: far enough
-    in that the wavefronts sit mid-flight rather than collapsed at the centre. */
+    in that the dust has drifted off its seed positions. */
 const STILL_T = 6.0;
+
+/**
+ * Framing. `uScale` is the half-extent of the *short* axis in shader units, so
+ * the sphere covers `R / uScale` of that axis — pick the share first and solve
+ * for the uniform. Phones get a fuller frame because there is less screen to
+ * fill; wide displays leave more air around it. Interpolated rather than
+ * stepped so a resize never snaps.
+ */
+function frameScale(aspect: number): number {
+  const k = Math.min(Math.max((aspect - 0.55) / 0.65, 0), 1);
+  const share = 0.86 - k * 0.12;
+  return SPHERE_R / share;
+}
 
 export function Singularity() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -40,7 +53,7 @@ export function Singularity() {
     let disposed = false;
     const perf = { acc: 0, frames: 0, drops: 0 };
 
-    /** Programs carry SHELLS/LAYERS as compile-time defines, so a tier change
+    /** Programs carry DUST/LAYERS as compile-time defines, so a tier change
         relinks rather than setting a uniform: a dynamic loop bound would cost
         every pixel a branch it never takes. */
     function build(): boolean {
@@ -48,7 +61,7 @@ export function Singularity() {
       if (program) gl.deleteProgram(program);
 
       program = buildProgram(gl, SING_VERT, SING_FRAG, {
-        SHELLS: quality.shells,
+        DUST: quality.dust,
         LAYERS: quality.layers,
       });
       if (!program) return false;
@@ -86,9 +99,7 @@ export function Singularity() {
       gl.uniform2f(uniform("uLean"), field.x, field.y);
       gl.uniform1f(uniform("uIntro"), still ? 1 : ramp(t, 0.1, 2.4));
       gl.uniform1f(uniform("uExposure"), 1.06);
-      // Portrait viewports widen the field so the sphere still clears the
-      // wordmark instead of being cropped by it.
-      gl.uniform1f(uniform("uScale"), aspect < 1 ? Math.min(1.32, 1 + (1 - aspect) * 0.3) : 1);
+      gl.uniform1f(uniform("uScale"), frameScale(aspect));
 
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
@@ -200,6 +211,28 @@ export function Singularity() {
     });
     ro.observe(canvas);
 
+    // A devicePixelRatio change — browser zoom, or the window dragged onto a
+    // display with a different density — leaves the CSS size untouched, so the
+    // observer above never fires and the buffer keeps the old resolution. A
+    // media query on the current ratio is the signal for it, and since it stops
+    // matching the moment it fires, it has to re-arm itself.
+    let dprMq: MediaQueryList | null = null;
+
+    function watchDpr() {
+      dprMq?.removeEventListener("change", onDprChange);
+      dprMq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      dprMq.addEventListener("change", onDprChange);
+    }
+
+    function onDprChange() {
+      if (disposed) return;
+      resize();
+      if (still) renderStill();
+      watchDpr();
+    }
+
+    watchDpr();
+
     canvas.addEventListener("webglcontextlost", onLost);
     canvas.addEventListener("webglcontextrestored", onRestored);
     document.addEventListener("visibilitychange", onVisibility);
@@ -220,6 +253,7 @@ export function Singularity() {
       disposed = true;
       stop();
       ro.disconnect();
+      dprMq?.removeEventListener("change", onDprChange);
 
       canvas.removeEventListener("webglcontextlost", onLost);
       canvas.removeEventListener("webglcontextrestored", onRestored);
