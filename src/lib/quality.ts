@@ -2,15 +2,19 @@ export type Tier = "high" | "medium" | "low";
 
 export type QualitySettings = {
   tier: Tier;
+  /** Ceiling on devicePixelRatio. The shader is fill-bound, so this is the
+      single biggest lever on frame cost. */
   maxDpr: number;
-  /** Integration steps per photon. This is the whole cost of the frame. */
-  steps: number;
+  /** Expanding wavefronts drawn per frame. */
+  shells: number;
+  /** Cell-splat layers in the stipple. Each layer is a full hash33 lookup. */
+  layers: number;
 };
 
 const PRESETS: Record<Tier, Omit<QualitySettings, "tier">> = {
-  high: { maxDpr: 1.6, steps: 220 },
-  medium: { maxDpr: 1.3, steps: 150 },
-  low: { maxDpr: 1.0, steps: 100 },
+  high: { maxDpr: 1.75, shells: 7, layers: 3 },
+  medium: { maxDpr: 1.4, shells: 5, layers: 2 },
+  low: { maxDpr: 1.0, shells: 4, layers: 2 },
 };
 
 export function settingsFor(tier: Tier): QualitySettings {
@@ -28,10 +32,15 @@ export function detectTier(): Tier {
   const area = window.innerWidth * window.innerHeight;
 
   if (coarse) {
-    // Phones and tablets: never attempt the full integration.
+    // Phones and tablets: never attempt the full sample count.
     return memory >= 6 && cores >= 6 ? "medium" : "low";
   }
   if (memory <= 4 || cores <= 4) return "low";
   if (cores <= 6 || area > 4_200_000) return "medium";
   return "high";
+}
+
+/** The next tier down, or null at the bottom. */
+export function downgrade(tier: Tier): Tier | null {
+  return tier === "high" ? "medium" : tier === "medium" ? "low" : null;
 }

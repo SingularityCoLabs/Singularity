@@ -12,7 +12,7 @@ const sans = Inter({
 
 export const metadata: Metadata = {
   title: "SINGULARITY",
-  description: "A black hole, traced photon by photon.",
+  description: "SINGULARITY",
 };
 
 export const viewport: Viewport = {
