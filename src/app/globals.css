@@ -82,15 +82,15 @@ main {
   inset: 0;
   z-index: 0;
   background:
-    radial-gradient(circle 3px at 50% 50%, rgba(190, 235, 255, 0.95), transparent 100%),
+    radial-gradient(circle 3px at 50% 50%, rgba(255, 255, 255, 0.95), transparent 100%),
     radial-gradient(
       circle 37vmin at 50% 50%,
-      rgba(9, 48, 70, 0.96) 0%,
-      rgba(9, 48, 70, 0.9) 91%,
-      rgba(232, 181, 58, 0.8) 97%,
-      rgba(232, 181, 58, 0) 100%
+      rgba(30, 30, 30, 0.96) 0%,
+      rgba(30, 30, 30, 0.9) 91%,
+      rgba(220, 220, 220, 0.8) 97%,
+      rgba(220, 220, 220, 0) 100%
     ),
-    radial-gradient(circle 58vmin at 50% 50%, rgba(18, 114, 160, 0.14), transparent 100%),
+    radial-gradient(circle 58vmin at 50% 50%, rgba(80, 80, 80, 0.14), transparent 100%),
     var(--bg);
 }
 
@@ -99,7 +99,7 @@ main {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(150, 230, 245, 0.65) 0.9px, transparent 1.2px);
+  background-image: radial-gradient(rgba(200, 200, 200, 0.65) 0.9px, transparent 1.2px);
   background-size: 11px 11px;
   -webkit-mask-image: radial-gradient(circle 37vmin at 50% 50%, #000 90%, transparent 99%);
   mask-image: radial-gradient(circle 37vmin at 50% 50%, #000 90%, transparent 99%);
@@ -191,8 +191,8 @@ main {
 .link:focus-visible {
   color: rgba(255, 255, 255, 0.92);
   text-shadow:
-    0 0 8px rgba(190, 235, 255, 0.35),
-    0 0 24px rgba(190, 235, 255, 0.12);
+    0 0 8px rgba(255, 255, 255, 0.35),
+    0 0 24px rgba(255, 255, 255, 0.12);
 }
 
 .link:focus-visible {

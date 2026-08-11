@@ -49,13 +49,13 @@ out vec4 fragColor;
 #define R        ${SPHERE_R.toFixed(3)}   // sphere radius
 #define RIM_W    0.016
 
-// Sampled from the reference: deep blue body, teal dots, ice highlight,
-// amber limb, mid-blue dust. No hue outside this ramp.
-const vec3 DEEP  = vec3(0.035, 0.161, 0.247);
-const vec3 CYAN  = vec3(0.122, 0.659, 0.722);
-const vec3 ICE   = vec3(0.639, 0.910, 0.961);
-const vec3 GOLD  = vec3(0.910, 0.710, 0.227);
-const vec3 SHELL = vec3(0.071, 0.447, 0.627);
+// Monochrome palette: black body, grey dots, white highlights,
+// white limb, dark grey dust. No colour, only luminance.
+const vec3 DEEP  = vec3(0.040, 0.040, 0.040);
+const vec3 CYAN  = vec3(0.550, 0.550, 0.550);
+const vec3 ICE   = vec3(1.000, 1.000, 1.000);
+const vec3 GOLD  = vec3(0.920, 0.920, 0.920);
+const vec3 SHELL = vec3(0.220, 0.220, 0.220);
 
 // ---------------------------------------------------------------------------
 // Hashes and value noise.
@@ -279,7 +279,7 @@ void main() {
 
   // ---- core ----------------------------------------------------------------
   float pulse = 0.76 + 0.24 * sin(t * 1.7);
-  col += vec3(0.55, 0.88, 1.0) * corePoint(uv) * pulse * 0.9;
+  col += vec3(1.0, 1.0, 1.0) * corePoint(uv) * pulse * 0.9;
 
   // A wide halo so the object sits in light rather than cutting out of black.
   col += SHELL * exp(-r * r / 0.95) * 0.09;
