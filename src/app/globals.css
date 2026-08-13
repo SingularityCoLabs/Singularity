@@ -1,10 +1,16 @@
 /* --------------------------------------------------------------------------
    SINGULARITY
-   One screen. One word, over an expanding field.
+   Hero + cards, scrollable.
    -------------------------------------------------------------------------- */
 
 :root {
   --bg: #000000;
+  --card-bg: rgba(255, 255, 255, 0.03);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-hover-border: rgba(255, 255, 255, 0.16);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
 }
 
 *,
@@ -13,52 +19,53 @@
   box-sizing: border-box;
 }
 
-html,
-body {
+html {
   margin: 0;
   padding: 0;
-  height: 100%;
-  overflow: hidden;
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  overscroll-behavior: none;
 }
 
 body {
-  font-family: var(--font-sans), "Helvetica Neue", Helvetica, Arial, sans-serif;
-}
-
-main {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
+  margin: 0;
+  padding: 0;
   background: var(--bg);
+  font-family: var(--font-sans), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--text-primary);
 }
 
 /* --------------------------------------------------------------------------
-   The field. Fills the viewport behind everything; the shader owns every
-   pixel, so nothing needs to show through it.
+   Hero section — full viewport, pinned shader behind the title.
+   -------------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   The field. Fills the hero behind everything.
    -------------------------------------------------------------------------- */
 
 .scene {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   display: block;
   width: 100%;
   height: 100%;
-  /* The pointer is read from the window, so the canvas never needs to catch
-     it — and the wordmark stays selectable. */
   pointer-events: none;
 }
 
-/* Sits between the field and the name: just enough darkness across the middle
-   band to hold white type off the lit dots, invisible at the edges. */
 .scrim {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
@@ -70,15 +77,8 @@ main {
   );
 }
 
-/* No WebGL: the same composition in CSS, so a browser that cannot run the
-   shader still shows a centred sphere rather than a blank field. Sized in vmin,
-   which is the short axis — the same axis the shader normalises on.
-
-   Every gradient closes on a fully transparent stop. A radial gradient holds
-   its last colour out to the edges of its box, so a tinted final stop would
-   wash the entire screen instead of fading into the black. */
 .fallback {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   background:
@@ -94,7 +94,6 @@ main {
     var(--bg);
 }
 
-/* The dots: one tiled pattern, masked to the sphere. */
 .fallback::before {
   content: "";
   position: absolute;
@@ -113,12 +112,8 @@ main {
   position: relative;
   z-index: 2;
   margin: 0;
-  padding-left: 0.24em; /* the tracking adds a trailing gap; this re-centres it */
+  padding-left: 0.24em;
 
-  /* Tracked out, the wordmark is ~9.5em wide, so the vw term has to stay under
-     10vw or it runs off a narrow phone. The vh term is what keeps it in
-     proportion on a short landscape screen, where 8vw would tower over the
-     sphere. */
   font-size: clamp(22px, min(8vw, 13vh), 148px);
   font-weight: 300;
   line-height: 1;
@@ -127,8 +122,6 @@ main {
   user-select: none;
 
   color: #ffffff;
-  /* Two shadows: a tight one for contrast against a lit dot, a wide soft one to
-     hold the type off the bright core underneath. */
   text-shadow:
     0 0 6px rgba(0, 0, 0, 0.72),
     0 0 26px rgba(0, 0, 0, 0.88);
@@ -153,114 +146,348 @@ main {
   }
 }
 
-/* --------------------------------------------------------------------------
-   Tagline – a single line of quiet type beneath the title.
-   -------------------------------------------------------------------------- */
-
-.tagline {
-  position: relative;
-  z-index: 2;
-  margin: 0;
-  white-space: nowrap;
-  text-align: center;
-
-  font-size: clamp(11px, min(1.8vw, 2.6vh), 15px);
-  font-weight: 300;
-  letter-spacing: 0.08em;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.42);
-
-  text-shadow:
-    0 0 6px rgba(0, 0, 0, 0.6),
-    0 0 20px rgba(0, 0, 0, 0.7);
-
-  animation: tagline-in 2000ms cubic-bezier(0.16, 0.84, 0.28, 1) 600ms both;
-}
-
-@keyframes tagline-in {
-  from {
-    opacity: 0;
-    letter-spacing: 0.16em;
-  }
-  to {
-    opacity: 1;
-    letter-spacing: 0.08em;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tagline {
-    animation: none;
-  }
-}
-
-/* --------------------------------------------------------------------------
-   Centre wrapper – stacks the title and links vertically.
-   -------------------------------------------------------------------------- */
-
-.center-content {
-  position: relative;
+/* Scroll hint at the bottom of the hero */
+.scroll-hint {
+  position: absolute;
+  bottom: 2.4rem;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.2em;
+  gap: 0.6rem;
+  animation: hint-in 2s cubic-bezier(0.16, 0.84, 0.28, 1) 1.2s both;
+}
+
+.scroll-hint span {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.scroll-hint-line {
+  width: 1px;
+  height: 28px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.25), transparent);
+  animation: pulse-line 2.4s ease-in-out infinite;
+}
+
+@keyframes hint-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes pulse-line {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-hint { animation: none; }
+  .scroll-hint-line { animation: none; }
 }
 
 /* --------------------------------------------------------------------------
-   Links row.
+   Cards section — sits below the hero.
    -------------------------------------------------------------------------- */
 
-.links {
+.cards-section {
+  position: relative;
+  width: 100%;
+  padding: clamp(3rem, 8vw, 7rem) clamp(1.2rem, 5vw, 4rem);
   display: flex;
-  align-items: center;
-  gap: 0.75em;
-  animation: links-in 1800ms cubic-bezier(0.16, 0.84, 0.28, 1) 400ms both;
+  justify-content: center;
 }
 
-.link {
-  font-size: clamp(11px, min(1.6vw, 2.4vh), 16px);
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: rgba(255, 255, 255, 0.55);
-  transition: color 320ms ease, text-shadow 320ms ease;
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(1rem, 2.5vw, 2rem);
+  width: 100%;
+  max-width: 960px;
 }
 
-.link:hover,
-.link:focus-visible {
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow:
-    0 0 8px rgba(255, 255, 255, 0.35),
-    0 0 24px rgba(255, 255, 255, 0.12);
-}
-
-.link:focus-visible {
-  outline: 1px solid rgba(255, 255, 255, 0.3);
-  outline-offset: 4px;
-  border-radius: 2px;
-}
-
-.link-divider {
-  font-size: clamp(11px, min(1.6vw, 2.4vh), 16px);
-  color: rgba(255, 255, 255, 0.25);
-  user-select: none;
-}
-
-@keyframes links-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
+@media (max-width: 640px) {
+  .cards-grid {
+    grid-template-columns: 1fr;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Card component.
+   -------------------------------------------------------------------------- */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(1.8rem, 3vw, 2.8rem);
+  min-height: clamp(260px, 35vw, 380px);
+
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+
+  /* Glassmorphism */
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+    0 2px 12px rgba(0, 0, 0, 0.3);
+
+  transition:
+    border-color 400ms ease,
+    background 400ms ease,
+    transform 400ms cubic-bezier(0.16, 0.84, 0.28, 1),
+    box-shadow 400ms ease;
+
+  /* Subtle entrance */
+  opacity: 0;
+  transform: translateY(24px);
+  animation: card-in 800ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+}
+
+.card:nth-child(1) { animation-delay: 0ms; }
+.card:nth-child(2) { animation-delay: 120ms; }
+
+@keyframes card-in {
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
+.card:hover {
+  border-color: var(--card-hover-border);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    0 8px 40px rgba(0, 0, 0, 0.45),
+    0 0 80px -20px rgba(255, 255, 255, 0.04);
+}
+
+.card:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.3);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .links {
+  .card {
     animation: none;
+    opacity: 1;
+    transform: none;
   }
+}
+
+/* Card interior */
+
+.card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.card-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  transition: opacity 300ms ease;
+}
+
+.card:hover .card-icon {
+  opacity: 1;
+}
+
+.card-label {
+  font-size: clamp(11px, 1.4vw, 13px);
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.card-title {
+  font-size: clamp(20px, 2.8vw, 32px);
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.card-desc {
+  font-size: clamp(13px, 1.5vw, 15px);
+  font-weight: 300;
+  line-height: 1.65;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  margin: 0.6rem 0 0;
+  max-width: 38ch;
+}
+
+.card-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.6rem;
+}
+
+/* ── GitHub stats row ───────────────────────────────────────────────── */
+
+.card-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.card-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-tertiary);
+  transition: color 300ms ease;
+}
+
+.card:hover .card-stat {
+  color: var(--text-secondary);
+}
+
+.card-stat svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.card-stat-value {
+  font-size: clamp(14px, 1.6vw, 17px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  transition: color 300ms ease;
+}
+
+.card:hover .card-stat-value {
+  color: var(--text-primary);
+}
+
+.card-stat-label {
+  font-size: clamp(11px, 1.2vw, 13px);
+  font-weight: 300;
+  letter-spacing: 0.06em;
+}
+
+.card-stat-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Latest post (RSS) ──────────────────────────────────────────────── */
+
+.card-latest {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  transition: background 300ms ease, border-color 300ms ease;
+}
+
+.card:hover .card-latest {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.card-latest-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.card-latest-title {
+  font-size: clamp(12px, 1.3vw, 14px);
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  transition: color 300ms ease;
+}
+
+.card:hover .card-latest-title {
+  color: var(--text-primary);
+}
+
+.card-latest-date {
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.card-latest-date::before {
+  content: "·";
+  margin-right: 0.4rem;
+}
+
+/* ── Card arrow CTA ─────────────────────────────────────────────────── */
+
+.card-arrow {
+  font-size: clamp(13px, 1.4vw, 15px);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color 300ms ease, gap 300ms ease;
+}
+
+.card:hover .card-arrow {
+  color: var(--text-secondary);
+  gap: 0.75rem;
+}
+
+.card-arrow svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 300ms ease;
+}
+
+.card:hover .card-arrow svg {
+  transform: translateX(3px);
+}
+
+/* --------------------------------------------------------------------------
+   Footer — quiet, minimal.
+   -------------------------------------------------------------------------- */
+
+.footer {
+  padding: 3rem clamp(1.2rem, 5vw, 4rem);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
 }
